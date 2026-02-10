@@ -1,14 +1,18 @@
 {
   "compilerOptions": {
-    "module": "esnext",
-    "target": "esnext",
+    "module": "commonjs",
+    "target": "es2020",
     "moduleResolution": "node",
     "outDir": "dist-electron",
     "rootDir": "main-process",
     "sourceMap": true,
     "strict": true,
     "esModuleInterop": true,
-    "skipLibCheck": true
+    "skipLibCheck": true,
+    "types": [
+      "node",
+      "electron"
+    ]
   },
   "include": [
     "main-process/**/*"

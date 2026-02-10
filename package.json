@@ -3,13 +3,13 @@
   "private": true,
   "version": "0.0.0",
   "type": "module",
-  "main": "dist-electron/main.js",
+  "main": "dist-electron/main.cjs",
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "dev:electron": "concurrently \"npm run dev\" \"wait-on tcp:5173 && tsc -p tsconfig.electron.json && cross-env ELECTRON_START_URL=http://localhost:5173 electron .\"",
+    "dev:electron": "node scripts/build-electron.cjs && concurrently \"npm run dev\" \"wait-on tcp:5173 && node scripts/launch-electron.cjs\"",
     "build:electron": "tsc -p tsconfig.electron.json && vite build && electron-builder"
   },
   "dependencies": {

@@ -4,7 +4,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { Card } from './components/Card';
 import { Zone } from './components/Zone';
 import { InputBar } from './components/InputBar';
-import { Card as CardType, ZoneType } from './types';
+import type { Card as CardType, ZoneType } from './types';
 import './index.css';
 
 const ZONES: { type: ZoneType; title: string; xPercent: number }[] = [
@@ -29,18 +29,38 @@ function App() {
   const [searchText, setSearchText] = useState('');
   const [reviewMode, setReviewMode] = useState(false);
 
+  console.log("App Rendering - Cards count:", cards.length, "Loaded:", loaded);
+
   // Load data
   useEffect(() => {
+    console.log("Loading data...");
     if (window.electronAPI) {
-      window.electronAPI.readUserData().then((data) => {
-        if (data && data.cards) {
-          setCards(data.cards);
-        }
-        setLoaded(true);
-      });
+      console.log("Electron API detected");
+      window.electronAPI.readUserData()
+        .then((data) => {
+          console.log("Data received from Electron:", data);
+          if (data && Array.isArray(data.cards)) {
+            setCards(data.cards);
+          }
+          setLoaded(true);
+        })
+        .catch(err => {
+          console.error("Failed to load Electron data:", err);
+          setLoaded(true);
+        });
     } else {
-      const local = localStorage.getItem('idea-parking-lot');
-      if (local) setCards(JSON.parse(local));
+      console.log("No Electron API, using standard browser storage");
+      try {
+        const local = localStorage.getItem('idea-parking-lot');
+        if (local) {
+          const parsed = JSON.parse(local);
+          if (Array.isArray(parsed)) {
+            setCards(parsed);
+          }
+        }
+      } catch (err) {
+        console.error("Failed to load local storage:", err);
+      }
       setLoaded(true);
     }
   }, []);
@@ -48,8 +68,9 @@ function App() {
   // Save data
   useEffect(() => {
     if (!loaded) return;
+    console.log("Saving data...", cards.length, "cards");
     if (window.electronAPI) {
-      window.electronAPI.writeUserData({ cards });
+      window.electronAPI.writeUserData({ cards }).catch(err => console.error("Save error:", err));
     } else {
       localStorage.setItem('idea-parking-lot', JSON.stringify(cards));
     }
@@ -58,11 +79,11 @@ function App() {
   // Keyboard Shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.target instanceof HTMLInputElement) return; // Ignore if typing in input
+      if (e.target instanceof HTMLInputElement) return;
 
       if (e.key === 'Delete' || e.key === 'Backspace') {
         if (selectedId) {
-          if (confirm('Delete selected card?')) {
+          if (window.confirm('Delete selected card?')) {
             setCards(prev => prev.filter(c => c.id !== selectedId));
             setSelectedId(null);
           }
@@ -95,13 +116,14 @@ function App() {
           if (card.id === activeDragId) return card;
           if (card.lastDraggedAt && now - card.lastDraggedAt < COOLDOWN_MS) return card;
 
-          const ageDays = (now - card.createdAt) / (1000 * 60 * 60 * 24);
+          const createdAt = card.createdAt || now;
+          const ageDays = (now - createdAt) / (1000 * 60 * 60 * 24);
           let targetZoneType: ZoneType = 'Do';
           if (ageDays > 14) targetZoneType = 'Forget';
           else if (ageDays > 2) targetZoneType = 'Someday';
 
-          const width = window.innerWidth;
-          const height = window.innerHeight;
+          const width = window.innerWidth || 800;
+          const height = window.innerHeight || 600;
 
           const targetZone = ZONES.find(z => z.type === targetZoneType);
           if (!targetZone) return card;
@@ -136,8 +158,8 @@ function App() {
   }, [activeDragId]);
 
   const addCard = (text: string) => {
-    const width = window.innerWidth;
-    const height = window.innerHeight;
+    const width = window.innerWidth || 800;
+    const height = window.innerHeight || 600;
     const newCard: CardType = {
       id: uuidv4(),
       text,
@@ -153,7 +175,7 @@ function App() {
 
   const handleDragStart = (id: string) => {
     setActiveDragId(id);
-    setSelectedId(id); // Select on drag start
+    setSelectedId(id);
   };
 
   const handleDragStop = (id: string, x: number, y: number) => {
@@ -161,7 +183,7 @@ function App() {
     setCards(prev => prev.map(c => {
       if (c.id !== id) return c;
 
-      const width = window.innerWidth;
+      const width = window.innerWidth || 800;
       let newZone: ZoneType = 'Someday';
       if (x + 96 < width * 0.33) newZone = 'Do';
       else if (x + 96 > width * 0.66) newZone = 'Forget';
@@ -178,7 +200,7 @@ function App() {
     }));
   };
 
-  const filteredCards = cards.filter(c => {
+  const filteredCards = (Array.isArray(cards) ? cards : []).filter(c => {
     if (searchText && !c.text.toLowerCase().includes(searchText.toLowerCase())) return false;
     return true;
   });
@@ -186,18 +208,20 @@ function App() {
   return (
     <div
       className="flex w-full h-full relative bg-gray-900 text-white overflow-hidden"
-      onMouseDown={() => setSelectedId(null)} // Deselect on background click
+      onMouseDown={() => setSelectedId(null)}
+      style={{ minHeight: '100vh' }}
     >
       <InputBar onAdd={addCard} />
 
       {/* Search Bar */}
       {showSearch && (
-        <div className="fixed top-16 right-4 z-50 bg-gray-800 p-2 rounded shadow border border-gray-600">
+        <div className="search-panel z-50">
           <input
             id="search-input"
             type="text"
             placeholder="Search..."
-            className="bg-gray-700 text-white p-1 rounded outline-none w-48"
+            className="input-box"
+            style={{ width: '12rem' }}
             value={searchText}
             onChange={e => setSearchText(e.target.value)}
             onMouseDown={e => e.stopPropagation()}
@@ -206,25 +230,24 @@ function App() {
       )}
 
       {/* Review Mode Toggle */}
-      <div className="fixed bottom-4 right-4 z-50" onMouseDown={e => e.stopPropagation()}>
+      <div className="review-panel z-50" onMouseDown={e => e.stopPropagation()}>
         <button
           onClick={() => setReviewMode(!reviewMode)}
-          className={`px-3 py-1 rounded text-sm font-bold ${reviewMode ? 'bg-yellow-600 text-white' : 'bg-gray-700 text-gray-400 hover:text-white'}`}
+          className={`btn ${reviewMode ? 'btn-yellow' : 'btn-gray'}`}
         >
           {reviewMode ? 'Exit Review' : 'Review Old'}
         </button>
       </div>
 
-      {/* Review Actions for Old Cards */}
+      {/* Review Actions */}
       {reviewMode && selectedId && (
-        <div className="fixed bottom-16 right-4 z-50 flex gap-2" onMouseDown={e => e.stopPropagation()}>
+        <div className="review-actions z-50" onMouseDown={e => e.stopPropagation()}>
           <button
             onClick={() => {
-              // Keep: move to Someday, updated now
               setCards(prev => prev.map(c => c.id === selectedId ? { ...c, zone: 'Someday', updatedAt: Date.now(), createdAt: Date.now() } : c));
               setSelectedId(null);
             }}
-            className="bg-green-600 px-3 py-1 rounded shadow hover:bg-green-500"
+            className="btn btn-green"
           >
             Keep (Reset)
           </button>
@@ -233,7 +256,7 @@ function App() {
               setCards(prev => prev.filter(c => c.id !== selectedId));
               setSelectedId(null);
             }}
-            className="bg-red-600 px-3 py-1 rounded shadow hover:bg-red-500"
+            className="btn btn-red"
           >
             Delete
           </button>
@@ -248,14 +271,23 @@ function App() {
       {/* Cards Layer */}
       <div className="absolute inset-0 z-10 pointer-events-none">
         {filteredCards.map(card => {
-          const isOld = (Date.now() - card.createdAt) > 14 * 24 * 60 * 60 * 1000;
+          const now = Date.now();
+          const createdAt = card.createdAt || now;
+          const isOld = (now - createdAt) > 14 * 24 * 60 * 60 * 1000;
           const highlight = reviewMode && isOld;
-          const dim = reviewMode && !isOld; // Dim others in review mode?
+          const dim = reviewMode && !isOld;
 
           return (
             <div
               key={card.id}
-              className={`pointer-events-auto transition-opacity duration-300 ${dim ? 'opacity-20' : 'opacity-100'}`}
+              className="pointer-events-auto"
+              style={{
+                position: 'absolute',
+                left: 0,
+                top: 0,
+                transition: 'opacity 0.3s',
+                opacity: dim ? 0.2 : 1
+              }}
             >
               <Card
                 card={card}

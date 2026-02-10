@@ -1,7 +1,7 @@
 
 import React from 'react';
 import Draggable from 'react-draggable';
-import { Card as CardType } from '../types';
+import type { Card as CardType } from '../types';
 
 interface CardProps {
     card: CardType;
@@ -15,12 +15,11 @@ export const Card: React.FC<CardProps> = ({ card, isSelected, onDragStop, onDrag
     const nodeRef = React.useRef(null);
 
     const ageDays = (Date.now() - card.createdAt) / (1000 * 60 * 60 * 24);
-    let bgClass = 'bg-gray-700';
-    if (ageDays < 2) bgClass = 'bg-blue-900/80 border-blue-500';
-    else if (ageDays < 14) bgClass = 'bg-yellow-900/80 border-yellow-500';
-    else bgClass = 'bg-red-900/80 border-red-500';
+    let ageZoneClass = 'card-someday';
+    if (ageDays < 2) ageZoneClass = 'card-do';
+    else if (ageDays > 14) ageZoneClass = 'card-forget';
 
-    const selectedClass = isSelected ? 'ring-2 ring-white z-50' : '';
+    const selectedClass = isSelected ? 'card-selected' : '';
 
     return (
         <Draggable
@@ -33,19 +32,19 @@ export const Card: React.FC<CardProps> = ({ card, isSelected, onDragStop, onDrag
             <div
                 ref={nodeRef}
                 onMouseDown={(e) => {
-                    e.stopPropagation(); // Prevent deselecting when clicking card
+                    e.stopPropagation();
                     onSelect();
                 }}
-                className={`absolute p-4 rounded shadow-lg cursor-grab active:cursor-grabbing border ${bgClass} ${selectedClass} text-white w-48 select-none transition-colors duration-500`}
-                style={{ zIndex: isSelected ? 100 : 10 + Math.floor(card.updatedAt / 10000000) % 50 }}
+                className={`absolute card-container ${ageZoneClass} ${selectedClass}`}
+                style={{ zIndex: isSelected ? 100 : 10 }}
             >
-                <div className="text-sm font-medium break-words pointer-events-none">
+                <div className="card-text">
                     {card.text}
                 </div>
-                <div className="text-xs text-gray-400 mt-2 pointer-events-none">
+                <div className="card-date">
                     {new Date(card.createdAt).toLocaleDateString()}
                 </div>
-                {card.pinned && <div className="absolute top-1 right-1 text-xs text-yellow-400">📌</div>}
+                {card.pinned && <div className="card-pin">📌</div>}
             </div>
         </Draggable>
     );
